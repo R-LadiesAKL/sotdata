@@ -1,0 +1,36 @@
+---
+title: "Summer of Tech Event and Intern Analysis Dec 2017"
+output: html_document
+---
+
+
+* * *
+
+## Setup
+
+```{r setup, results='asis', include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,warning=FALSE)
+```
+
+**LOAD R PACKAGES**
+
+```{r}
+library(tidyverse)
+```
+
+**IMPORT DATA**
+
+The Summer of Tech data is available in the R-Ladies github [link](https://github.com/R-LadiesAKL/sotdata). We will import these datasets using the read_csv function from the [readr](https://cran.r-project.org/web/packages/readr/index.html) R Package.
+
+```{r import data}
+# Import the "2017 event detail report.csv" 
+eventdetail <- read_csv("https://raw.githubusercontent.com/R-LadiesAKL/sotdata/master/2017%20event%20detail%20report.csv")
+# Import the "Event attendances data Dec 2017.csv"
+event <- read_csv("https://raw.githubusercontent.com/R-LadiesAKL/sotdata/master/Event%20attendances%20data%20Dec%202017.csv")
+# Import the intern data "Intern data Dec 2017.csv"
+intern <- read_csv("https://raw.githubusercontent.com/R-LadiesAKL/sotdata/master/Intern%20data%20Dec%202017.csv")
+# Import the "Institution to region mapper.csv"
+mapper <- read_csv("https://raw.githubusercontent.com/R-LadiesAKL/sotdata/master/Institution%20to%20region%20mapper.csv")
+# Import the "2017 interns per employer.csv"
+internemployer <- read_csv("https://raw.githubusercontent.com/R-LadiesAKL/sotdata/master/2017%20interns%20per%20employer.csv")
+```
