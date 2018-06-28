@@ -3,7 +3,10 @@
 This repo contains the following:
       
 - Summer of Tech (sot) Datasets
-- Import data script importsot.Rmd
+- Import data importsot.Rmd
+- Other R markdowns from the meetup
+
+
 
 **Datasets for Summer of Tech dataviz meetup 21 June 2018**
       
@@ -14,6 +17,7 @@ The following datasets have been made available by Summer of Tech for the R-Ladi
 - "Event attendances data Dec 2017.csv"  includes event name and type, and student details
 - "Institution to region mapper.csv" includes institutions and corresponding region  
 - "Intern data Dec 2017.csv" includes student details and internship details
+- "internships_skills.csv" mapping in intern job titles and skills required
 
 **Further information**
       
