@@ -1,0 +1,194 @@
+---
+title: "Summer of Tech NetworkD3 plots Dec 2017"
+author: "Kim Fitter"
+date: "27 June 2018"
+output: 
+      html_document
+---
+
+This R Markdown plots a Sankey diagram and a force directed network using [networkD3](https://cran.r-project.org/web/packages/networkD3/index.html).
+
+```{r setup, echo=FALSE, results='asis'}
+knitr::opts_chunk$set(warning=FALSE)
+```
+
+
+```{r load packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(networkD3)
+```
+
+## Data 
+
+The Summer of Tech data is available in the R-Ladies github [link](https://github.com/R-LadiesAKL/sotdata). 
+
+```{r import data, message=FALSE}
+# Import the "Event attendances data Dec 2017.csv"
+event <- read_csv("https://raw.githubusercontent.com/R-LadiesAKL/sotdata/master/Event%20attendances%20data%20Dec%202017.csv")
+# Import the intern data "Intern data Dec 2017.csv"
+intern <- read_csv("https://raw.githubusercontent.com/R-LadiesAKL/sotdata/master/Intern%20data%20Dec%202017.csv")
+#  Only select the first 214 rows, the rest are N/A
+intern <- intern[1:214,]
+```
+  
+
+
+```{r make names}
+#  We will use the make.names base R function to make syntactically valid names of the column variables for further analysis and output in R Markdown. For these names, it adds a "." to the spaces in the names
+#  Make Syntactically Valid Names of the event
+names(event) <- make.names(names(event))
+#  Make Syntactically Valid Names of the intern
+names(intern) <- make.names(names(intern))
+```
+
+
+
+## Clean Data
+
+**Duplicates**
+
+From the summary statistics there appears to be a student who has two internships? Let's view and remove the duplicate token.
+
+```{r duplicate internships}
+#  Check which internship with the duplicated token ID
+intern %>% 
+      filter(token==intern$token[duplicated(intern$token)]) %>% 
+      kableExtra::kable() %>%
+      kableExtra::kable_styling()
+# Remove the duplicate token by identifying the row number with the duplicate and then using dplyr's slice function
+intern <- intern %>% 
+      slice(-which(duplicated(intern$token)))
+```
+
+**Add successful intern flag**
+
+Add a variable to the intern data to identify successful internship students after joining with the event data.
+
+```{r clean files}
+# Add a variable to the intern data to identify successful internship students after merged with the event data
+intern <- intern %>% 
+      mutate(internship="Successful Internship")
+```
+
+**Rename column variables**
+
+Let's rename some of the column variables to be able to track which dataset set they came from.
+
+```{r rename cols}
+# Rename column variables
+intern <- intern %>% 
+      # Rename the intern Region to intern.region
+      rename_at(vars('Region'), ~ 'Intern.region') %>% 
+      # Rename the intern institution to intern.institution
+      rename_at(vars('Institution'), ~ 'Intern.institution') %>% 
+      # Rename the intern Year of study to Intern.year.of.study
+      rename_at(vars('Year.of.study'), ~ 'Intern.year.of.study')
+event <- event %>% 
+       # Rename the Student token variable in event to token so that this is the same as the intern variable name.
+      rename_at(vars('Student.token'), ~ 'token') %>% 
+      # Rename the region institution to region.institution
+      rename_at(vars('Institution'), ~ 'Event.institution') 
+```
+  
+
+
+**Join files**
+
+Next Join the intern and event files by the common identifier, the student ID, "token".
+
+```{r join}
+# Join the intern and event by the common token variable
+combine <- full_join(intern,event,by="token")
+# Replace the internship NA's to no. This will include event attendance states including late withdrawals
+combine$internship <- replace_na(combine$internship,"Unsuccessful Internships")
+# Since some students attend multiple events, let's create a flag for attended events
+combine <- combine %>% 
+      mutate(registered.for.events=ifelse(is.na(Event.region),"no","yes"))
+# Create a new student institution variable from the Event and intern institution variables
+combine <- combine %>% 
+      mutate(Institution=ifelse(is.na(Event.institution),Intern.institution, Event.institution))
+```
+
+To view success factors I  wanted to visualise the flows from one set of values to another i.e. flow from a factor to whether the student was successful or unsuccessful with an internship.
+
+**Institutions**
+
+The flow I decided to look at is  the flow of number of students from institutions to successful and unsuccessful internships.
+
+I initially tried the Use the gvisSankey function from the [googleVis](https://cran.r-project.org/web/packages/googleVis/) R package. The downside is that it creates a plot in a new browser tab and not easily embedded to R Markdown so not suitable for use here.
+
+Then I tried the [networkD3](https://cran.r-project.org/web/packages/networkD3/index.html) R package to create a D3 JavaScript Sankey diagram.
+
+I included a check that the total number of intern tokens in original file is same as sum in this summary after the join and also include a new "Student Institution" variable.
+
+See below the interactive Sankey diagram:
+
+```{r instition to yes or no internships, results='asis'}
+# Create a summary of the counts of Event institutions by unique interns
+inst_intern_count <- combine %>%
+      distinct(Event.institution,internship,token) %>%
+      group_by(Event.institution,internship) %>%  
+      summarize(counts = n()) %>%
+      ungroup() %>%  
+      arrange(desc(counts))
+# Replace the Event NA's to Other
+inst_intern_count$Event.institution <- replace_na(inst_intern_count$Event.institution,"Other Institutions")
+# Since there is a large number of institutions, Select some to show and group the rest as "Other"
+keep <- c("Victoria University of Wellington","Auckland University","Auckland University of Technology","Whitireia New Zealand","Wellington Institute of Technology (Weltec)","Massey University (Wellington)")
+notkeep <- setdiff(unique(inst_intern_count$Event.institution), keep)
+inst_intern_count$Event.institution[inst_intern_count$Event.institution %in% notkeep] <- "Other"
+# Check that the total intern tokens in original file is same as sum in this summary
+length(unique(intern$token))==
+inst_intern_count %>% filter(internship=="Successful Internship") %>% select(counts) %>% sum()
+
+# Create the links and nodes for the Sankey and force network diagrams
+name_vec <- c(unique(inst_intern_count$Event.institution), unique(inst_intern_count$internship))
+name_vec <- name_vec[!is.na(name_vec)]
+lengthid <- length(name_vec)
+nodes <- data.frame(name = name_vec,id=0:(lengthid-1),stringsAsFactors = FALSE)
+links <- inst_intern_count %>%
+  left_join(nodes, by = c('Event.institution' = 'name')) %>%
+  rename(origin_id = id) %>%
+  left_join(nodes, by = c('internship' = 'name')) %>%
+  rename(dest_id = id) %>% 
+      data.frame()
+```
+
+
+```{r sankey plot, results='asis'}
+sankeyNetwork(Links = links, Nodes = nodes, Source = 'origin_id', Target = 'dest_id', Value = 'counts', NodeID = 'name', 
+              # Format
+              fontSize = 14,
+              nodeWidth = 20,
+              fontFamily = "sans-serif")   
+
+# Use this to save the plot as html
+# saveNetwork(file = 'sankey.html')
+```
+
+Let's view this with an interactive and zoom-able force directed network graph using the forceNetwork function from the same [networkD3](https://cran.r-project.org/web/packages/networkD3/index.html) R package. 
+
+```{r force network, results='asis'}
+# Create and plot the forcenetwork with the links and nodes
+forceNetwork(Links = links, Nodes = nodes, Source = 'origin_id', Target = 'dest_id', NodeID = 'name', Group = 'id', 
+             # Customise the edges
+             Value = 'counts', 
+             # Layout
+             #height = 500, 
+             #width = 500, 
+             zoom = TRUE,
+             # Customise the links
+             linkWidth = networkD3::JS("function(d) { return d.value/50; }"),
+             charge=-5000,
+             # Format
+             fontFamily = "sans-serif",
+             opacity = 0.95, 
+             opacityNoHover = 0.5,
+             fontSize = 18)   
+
+# Use this to save the plot as html
+# saveNetwork(file =  'forcediag.html',selfcontained = TRUE)
+```
+  
+
+
